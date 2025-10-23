@@ -1,0 +1,58 @@
+// Prisma'ya bizim için TypeScript kodları üretmesini söylüyoruz.
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Veritabanı kaynağımızı tanımlıyoruz (.env dosyasından okur)
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ------------------------------------
+// YENİ MODELLERİMİZ (TABLOLARIMIZ)
+// ------------------------------------
+
+// Proje Modeli: Testleri gruplamak için.
+model Project {
+  id        String   @id @default(cuid()) // Benzersiz ID
+  name      String   // Proje adı (örn: "E-ticaret Sitesi")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // İlişki: Bir projenin BİRDEN ÇOK testi olabilir.
+  tests     Test[]
+}
+
+// Test Modeli: Bir k6 testinin ayarlarını tutar.
+model Test {
+  id          String   @id @default(cuid())
+  name        String   // Test adı (örn: "Giriş Yapma Senaryosu")
+  targetUrl   String   // Test edilecek hedef URL
+  durationSec Int      // Testin süresi (saniye)
+  vus         Int      // Sanal kullanıcı sayısı
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // İlişki: Bir test BİR projeye aittir.
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // İlişki: Bir testin BİRDEN ÇOK çalıştırılma kaydı olabilir.
+  runs      TestRun[]
+}
+
+// Test Çalıştırma Kaydı Modeli: Testin her çalıştırılma kaydını tutar.
+model TestRun {
+  id        String   @id @default(cuid())
+  status    String   @default("PENDING") // Durum: PENDING, RUNNING, COMPLETED, FAILED
+  createdAt DateTime @default(now())
+  endedAt   DateTime? // Opsiyonel (iş bitince dolacak)
+
+  // İlişki: Bir çalıştırma kaydı BİR teste aittir.
+  testId String
+  test   Test     @relation(fields: [testId], references: [id], onDelete: Cascade)
+
+  // Sonuçları basitçe JSON olarak saklayacağız (şimdilik)
+  resultSummary Json? // Opsiyonel
+}

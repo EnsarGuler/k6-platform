@@ -1,0 +1,36 @@
+# Docker Compose dosya formatının versiyonunu belirtiyoruz.
+version: '3.8'
+
+# Çalıştıracağımız servisleri (konteynerları) burada tanımlıyoruz.
+services:
+
+  # PostgreSQL veritabanı servisimiz
+  postgres-db:
+    image: postgres:15-alpine      # Hızlı ve küçük olan resmi PostgreSQL 15 imajını kullan.
+    container_name: postgres-db     # Konteynera bir isim verelim.
+    restart: always                 # Eğer bir hata olup kapanırsa, Docker onu otomatik yeniden başlatsın.
+    environment:
+      - POSTGRES_USER=user          # Veritabanı için kullanıcı adı.
+      - POSTGRES_PASSWORD=password  # Veritabanı için şifre.
+      - POSTGRES_DB=k6db            # Veritabanımızın adı.
+    ports:
+      - "5432:5432"                 # Bilgisayarımızın 5432 portunu, konteynerin 5432 portuna bağla.
+                                    # Bu sayede backend uygulamamız veritabanına ulaşabilecek.
+    volumes:
+      - ./postgres-data:/var/lib/postgresql/data  # Veritabanı verilerini bilgisayarımızdaki bir klasörde sakla.
+                                                  # Böylece konteyner silinse bile verilerimiz kaybolmaz.
+
+  # Redis servisimiz (kuyruk yönetimi ve cache için)
+  redis-cache:
+    image: redis:7-alpine           # Resmi Redis 7 imajını kullan.
+    container_name: redis-cache
+    restart: always
+    ports:
+      - "6379:6379"                 # Bilgisayarımızın 6379 portunu, konteynerin 6379 portuna bağla.
+    volumes:
+      - ./redis-data:/data          # Redis verilerini kalıcı hale getir.
+
+# Verilerin kalıcı olacağı disk alanlarını (volumes) tanımlıyoruz.
+volumes:
+  postgres-data:
+  redis-data:

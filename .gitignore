@@ -1,0 +1,12 @@
+﻿# Genel
+.vscode/
+.DS_Store
+
+# Docker/Volume
+postgres-data/
+
+# Backend artefact/gereksizler
+backend/node_modules/
+backend/dist/
+backend/.env
+backend/.env.*
