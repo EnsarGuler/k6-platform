@@ -3,7 +3,7 @@
 import { IsNotEmpty, IsString } from 'class-validator';
 
 export class CreateProjectDto {
-  @IsString()     // "name" alanı string olmalı
-  @IsNotEmpty()   // "name" alanı boş olmamalı
+  @IsString() // "name" alanı string olmalı
+  @IsNotEmpty() // "name" alanı boş olmamalı
   name: string;
 }

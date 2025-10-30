@@ -1,58 +1,67 @@
-// Prisma'ya bizim için TypeScript kodları üretmesini söylüyoruz.
+// backend/prisma/schema.prisma
+
 generator client {
   provider = "prisma-client-js"
 }
 
-// Veritabanı kaynağımızı tanımlıyoruz (.env dosyasından okur)
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-// ------------------------------------
-// YENİ MODELLERİMİZ (TABLOLARIMIZ)
-// ------------------------------------
-
-// Proje Modeli: Testleri gruplamak için.
+// Proje Modeli (Aynı Kalıyor)
 model Project {
-  id        String   @id @default(cuid()) // Benzersiz ID
-  name      String   // Proje adı (örn: "E-ticaret Sitesi")
+  id        String   @id @default(cuid())
+  name      String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  // İlişki: Bir projenin BİRDEN ÇOK testi olabilir.
   tests     Test[]
 }
 
-// Test Modeli: Bir k6 testinin ayarlarını tutar.
-model Test {
-  id          String   @id @default(cuid())
-  name        String   // Test adı (örn: "Giriş Yapma Senaryosu")
-  targetUrl   String   // Test edilecek hedef URL
-  durationSec Int      // Testin süresi (saniye)
-  vus         Int      // Sanal kullanıcı sayısı
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+// YENİ TABLO: Senaryo Kütüphanemiz
+model Scenario {
+  id            String  @id @default(cuid())
+  name          String  @unique // Örn: "User Login", "Browse Homepage"
+  description   String  @db.Text
+  
+  // k6 script'inin 'export function SENARYO_ADI() { ... }' kısmını içeren parça
+  scriptFragment String  @db.Text 
 
-  // İlişki: Bir test BİR projeye aittir.
-  projectId String
-  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-
-  // İlişki: Bir testin BİRDEN ÇOK çalıştırılma kaydı olabilir.
-  runs      TestRun[]
+  // Bu senaryonun ait olduğu testler (Çoka Çok İlişki)
+  tests         Test[]    @relation("TestScenarios")
 }
 
-// Test Çalıştırma Kaydı Modeli: Testin her çalıştırılma kaydını tutar.
+
+// GÜNCELLENEN TABLO: Test Modelimiz
+model Test {
+  id        String   @id @default(cuid())
+  name      String   // Örn: "E-Ticaret Sitesi Tam Yük Testi"
+  
+  // k6'nın 'options' objesini burada JSON olarak saklayacağız
+  options   Json
+  
+  // Kullanıcının "Benim testim 'https://my-site.com' adresini hedef alacak"
+  // demesini sağlayan alan.
+  targetBaseUrl String?  // Opsiyonel (?) yaptık, belki bazı testler istemez
+
+  // İlişki: Bu testin hangi senaryoları içerdiğini tutar
+  scenarios Scenario[] @relation("TestScenarios")
+
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  runs      TestRun[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// TestRun Modeli (Aynı Kalıyor)
 model TestRun {
   id        String   @id @default(cuid())
-  status    String   @default("PENDING") // Durum: PENDING, RUNNING, COMPLETED, FAILED
+  status    String   @default("PENDING")
   createdAt DateTime @default(now())
-  endedAt   DateTime? // Opsiyonel (iş bitince dolacak)
-
-  // İlişki: Bir çalıştırma kaydı BİR teste aittir.
+  endedAt   DateTime?
   testId String
   test   Test     @relation(fields: [testId], references: [id], onDelete: Cascade)
-
-  // Sonuçları basitçe JSON olarak saklayacağız (şimdilik)
-  resultSummary Json? // Opsiyonel
+  resultSummary Json?
 }

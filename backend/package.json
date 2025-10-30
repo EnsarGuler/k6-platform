@@ -29,6 +29,7 @@
     "bull": "^4.16.5",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
+    "execa": "^9.6.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1"
   },

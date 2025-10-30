@@ -1,12 +1,30 @@
-﻿# Genel
-.vscode/
+﻿# Docker Compose tarafından oluşturulan kalıcı veriler
+/postgres-data/
+/redis-data/
+
+# İşletim sistemi dosyaları
 .DS_Store
+Thumbs.db
 
-# Docker/Volume
-postgres-data/
+# VS Code ayarları (paylaşılmaması gerekenler)
+.vscode/launch.json
+.vscode/tasks.json
 
-# Backend artefact/gereksizler
-backend/node_modules/
-backend/dist/
-backend/.env
-backend/.env.*
+# --- Backend (NestJS) ---
+/backend/node_modules
+/backend/dist
+/backend/.env
+/backend/temp/
+
+# --- Frontend (Next.js) ---
+/frontend/node_modules
+/frontend/.next
+/frontend/out
+/frontend/.env.local
+/frontend/.env*.local
+
+# Log dosyaları
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

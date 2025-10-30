@@ -6,6 +6,7 @@ import { PrismaService } from './prisma.service';
 import { ProjectsModule } from './projects/projects.module';
 import { TestsModule } from './tests/tests.module';
 import { BullModule } from '@nestjs/bull';
+import { ScenariosModule } from './scenarios/scenarios.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { BullModule } from '@nestjs/bull';
     }),
     ProjectsModule,
     TestsModule,
+    ScenariosModule,
   ],
 
   controllers: [AppController],

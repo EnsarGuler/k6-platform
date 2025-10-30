@@ -1,9 +1,11 @@
 import {
   IsNotEmpty,
   IsString,
+  IsObject,
+  IsArray,
+  ArrayMinSize,
   IsUrl,
-  IsInt,
-  IsPositive,
+  IsOptional,
 } from 'class-validator';
 
 export class CreateTestDto {
@@ -11,19 +13,21 @@ export class CreateTestDto {
   @IsNotEmpty()
   name: string; // Testin adı
 
-  @IsUrl() // Gelen verinin geçerli bir URL olduğundan emin ol
-  @IsNotEmpty()
-  targetUrl: string; // Örn: "https://api.example.com"
-
-  @IsInt() // Gelen verinin bir tam sayı olduğundan emin ol
-  @IsPositive() // Pozitif bir sayı olduğundan emin ol
-  durationSec: number; // Saniye cinsinden süre
-
-  @IsInt()
-  @IsPositive()
-  vus: number; // Sanal kullanıcı sayısı (Virtual Users)
-
   @IsString()
   @IsNotEmpty()
-  projectId: string; // Bu testin ait olduğu projenin ID'si
+  projectId: string; // Hangi projeye ait olduğu
+
+  @IsObject()
+  @IsNotEmpty()
+  options: Record<string, any>; // k6 'options' objesi (JSON)
+  // Örn: { "vus": 10, "duration": "30s" }
+
+  @IsArray()
+  @IsString({ each: true }) // Dizideki her eleman string olmalı
+  @ArrayMinSize(1) // En az bir senaryo seçilmeli
+  selectedScenarioIds: string[]; // Seçilen senaryoların ID'leri
+
+  @IsUrl()
+  @IsOptional() // Boş gelmesine izin ver
+  targetBaseUrl?: string;
 }
