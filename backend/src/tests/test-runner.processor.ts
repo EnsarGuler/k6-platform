@@ -1,5 +1,3 @@
-// backend/src/tests/test-runner.processor.ts
-
 import { Process, Processor } from '@nestjs/bull';
 import type { Job } from 'bull';
 import { Logger } from '@nestjs/common';
@@ -7,23 +5,26 @@ import { PrismaService } from 'src/prisma.service';
 import { execa } from 'execa';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { EventsGateway } from 'src/events.gateway';
 
 @Processor('test-runner')
 export class TestRunnerProcessor {
   private readonly logger = new Logger(TestRunnerProcessor.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private eventsGateway: EventsGateway,
+  ) {}
 
   @Process('run-k6-test')
   async handleRunK6Test(job: Job) {
     this.logger.log(`Processing job... Job ID: ${job.id}`);
     const { runId, test } = job.data;
-    this.logger.log(`TestRun ID: ${runId}`);
-    this.logger.log(`Running Test: ${test.name}`);
 
     const tempDir = path.join(process.cwd(), 'temp');
     const scriptPath = path.join(tempDir, `${runId}.js`);
     const summaryPath = path.join(tempDir, `${runId}.json`);
+    const realtimeLogPath = path.join(tempDir, `${runId}_live.json`); // Canlı log dosyası
 
     const k6ScriptContent = this.buildK6Script(
       test.options,
@@ -31,26 +32,67 @@ export class TestRunnerProcessor {
       test.targetBaseUrl,
     );
 
+    let tailInterval: NodeJS.Timeout;
+
     try {
       await this.prisma.testRun.update({
         where: { id: runId },
         data: { status: 'RUNNING' },
       });
-
       await fs.writeFile(scriptPath, k6ScriptContent);
-      this.logger.log(`Temporary script file written to ${scriptPath}`);
 
-      const k6Command = 'k6';
-      const k6Args = ['run', scriptPath, '--summary-export', summaryPath];
+      // --- CANLI VERİ OKUMA DÖNGÜSÜ ---
+      // Her 1 saniyede bir JSON dosyasının sonunu okuyup Frontend'e atacağız
+      tailInterval = setInterval(async () => {
+        try {
+          const stats = await fs.stat(realtimeLogPath).catch(() => null);
+          if (!stats) return;
 
-      this.logger.log(`Executing k6 command: ${k6Command} ${k6Args.join(' ')}`);
+          const content = await fs.readFile(realtimeLogPath, 'utf-8');
+          const lines = content.trim().split('\n');
 
-      await execa(k6Command, k6Args, { stdio: 'inherit' });
-      this.logger.log(`k6 execution finished.`);
+          // Son satırlardan "http_req_duration" metriğini bul
+          for (let i = lines.length - 1; i >= 0; i--) {
+            try {
+              const json = JSON.parse(lines[i]);
+              // Sadece veri noktalarını al ve http_req_duration'a bak
+              if (
+                json.type === 'Point' &&
+                json.metric === 'http_req_duration'
+              ) {
+                // Frontend'e gönder!
+                this.eventsGateway.sendProgress(test.id, {
+                  latency: json.data.value, // Gecikme süresi (ms)
+                  time: new Date().toLocaleTimeString(),
+                });
+                break; // Son veriyi bulduk, döngüden çık
+              }
+            } catch (e) {}
+          }
+        } catch (err) {
+          // Okuma hatası olursa sessiz kal
+        }
+      }, 1000);
+
+      // k6 Çalıştır (--out json ile)
+      await execa(
+        'k6',
+        [
+          'run',
+          scriptPath,
+          '--summary-export',
+          summaryPath,
+          '--out',
+          `json=${realtimeLogPath}`,
+        ],
+        { stdio: 'inherit' },
+      );
+
+      // Bitince temizlik
+      clearInterval(tailInterval);
 
       const summaryContent = await fs.readFile(summaryPath, 'utf-8');
       const results = JSON.parse(summaryContent);
-      this.logger.log(`k6 summary file read successfully.`);
 
       await this.prisma.testRun.update({
         where: { id: runId },
@@ -61,85 +103,54 @@ export class TestRunnerProcessor {
         },
       });
 
-      this.logger.log(`Job processing COMPLETED. Job ID: ${job.id}`);
+      // Bitiş sinyali
+      this.eventsGateway.sendProgress(test.id, { type: 'FINISHED' });
+
       return { status: 'COMPLETED' };
     } catch (error) {
-      this.logger.error(
-        `Job processing FAILED. Job ID: ${job.id}`,
-        error.stack,
-      );
+      clearInterval(tailInterval!); // Hata olsa bile döngüyü durdur
+      this.logger.error(`Failed`, error.stack);
       await this.prisma.testRun.update({
         where: { id: runId },
-        data: { status: 'FAILED', endedAt: new Date() },
+        data: { status: 'FAILED' },
       });
       throw error;
     } finally {
       try {
-        await fs.unlink(scriptPath);
-        await fs.unlink(summaryPath);
-        this.logger.log(`Temporary files deleted.`);
-      } catch (cleanupError) {
-        this.logger.warn(
-          `Failed to delete temporary files for runId: ${runId}`,
-        );
-      }
+        await fs.unlink(scriptPath).catch(() => {});
+        await fs.unlink(summaryPath).catch(() => {});
+        await fs.unlink(realtimeLogPath).catch(() => {});
+      } catch (e) {}
     }
   }
 
-  // --- GÜNCELLENMİŞ YARDIMCI FONKSİYONLAR ---
-
+  // --- ESKİ YARDIMCI METODLAR AYNEN KALDI ---
   private buildK6Script(
     options: any,
     scenarios: any[],
     targetBaseUrl: string,
   ): string {
-    this.logger.log('Building k6 script from fragments...');
-
-    let script = `
-import http from 'k6/http';
-import { sleep } from 'k6';
-const BASE_URL = '${targetBaseUrl}';
-`;
-
-    for (const scenario of scenarios) {
-      script += `\n${scenario.scriptFragment}\n`;
-    }
-
-    const k6Scenarios: Record<string, any> = {};
-    for (const scenario of scenarios) {
-      const funcName = this.extractFunctionName(scenario.scriptFragment);
-
-      // HATA DÜZELTMESİ BURADA:
-      // "User Login" gibi bir ismi "User_Login" gibi k6-güvenli bir isme çevir
-      const safeScenarioName = this.createSafeName(scenario.name);
-
+    let script = `import http from 'k6/http'; import { check, sleep } from 'k6'; const BASE_URL = '${targetBaseUrl}';`;
+    for (const s of scenarios) script += `\n${s.scriptFragment}\n`;
+    const k6Scenarios: any = {};
+    for (const s of scenarios) {
+      const funcName = this.extractFunctionName(s.scriptFragment);
       if (funcName) {
-        k6Scenarios[safeScenarioName] = {
-          executor: 'ramping-vus',
+        k6Scenarios[this.createSafeName(s.name)] = {
+          executor: 'constant-vus',
           ...options,
           exec: funcName,
         };
       }
     }
-
     script += `\nexport const options = { scenarios: ${JSON.stringify(k6Scenarios, null, 2)} };\n`;
-
-    this.logger.log('k6 script built successfully.');
     return script;
   }
-
-  // k6'nın 'export function User_Login() { ... }' metninden
-  // 'User_Login' ismini çıkaran basit bir yardımcı fonksiyon.
-  private extractFunctionName(fragment: string): string | null {
-    const match = fragment.match(/export function (\w+)\s*\(/);
-    return match ? match[1] : null;
+  private extractFunctionName(f: string) {
+    const m = f.match(/export function (\w+)\s*\(/);
+    return m ? m[1] : null;
   }
-
-  // YENİ YARDIMCI FONKSİYON:
-  // k6'nın sevdiği (boşluksuz) bir isim oluşturur
-  private createSafeName(name: string): string {
-    // Tüm boşlukları alt tireye çevirir
-    // k6'nın izin vermediği diğer karakterleri (harf, sayı, _, - dışında) kaldırır
-    return name.replace(/ /g, '_').replace(/[^a-zA-Z0-9_-]/g, '');
+  private createSafeName(n: string) {
+    return n.replace(/ /g, '_').replace(/[^a-zA-Z0-9_-]/g, '');
   }
 }

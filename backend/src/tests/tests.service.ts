@@ -11,7 +11,7 @@ export class TestsService {
     @InjectQueue('test-runner') private testRunnerQueue: Queue,
   ) {}
 
-  // YENİ 'create' FONKSİYONU (Hata Çözüldü)
+  // --- 1. GÜNCELLENEN CREATE METODU (Hata Çözücü) ---
   async create(createTestDto: CreateTestDto) {
     const { name, projectId, options, selectedScenarioIds, targetBaseUrl } =
       createTestDto;
@@ -26,9 +26,20 @@ export class TestsService {
         name: name,
         options: options, // JSON objesini doğrudan kaydet
         targetBaseUrl: targetBaseUrl,
+
+        // KRİTİK DÜZELTME BURADA:
+        // Eskiden sadece 'connect' diyorduk, bulamazsa patlıyordu.
+        // Şimdi 'connectOrCreate' diyoruz: Bulamazsan oluştur!
         project: {
-          connect: { id: projectId }, // Projeye bağla
+          connectOrCreate: {
+            where: { id: projectId },
+            create: {
+              id: projectId,
+              name: 'Varsayılan Proje',
+            },
+          },
         },
+
         scenarios: {
           connect: scenarioConnections, // Seçilen tüm senaryolara bağla
         },
@@ -36,24 +47,23 @@ export class TestsService {
     });
   }
 
-  // 'findAll' FONKSİYONU
+  // --- 2. GÜNCELLENEN FINDALL METODU (Tablo İçin) ---
   findAll() {
     return this.prisma.test.findMany({
       include: {
-        scenarios: {
-          select: { id: true, name: true }, // İlişkili senaryoların adını da al
-        },
+        scenarios: true,
+        runs: true,
       },
+      orderBy: { createdAt: 'desc' }, // En yeniler en üstte gelsin
     });
   }
 
-  // 'runTest' FONKSİYONU
+  // --- 3. RUNTEST METODU (Aynı Kaldı) ---
   async runTest(testId: string) {
-    // Testi ve ilişkili senaryo parçacıklarını DB'den al
     const testToRun = await this.prisma.test.findUnique({
       where: { id: testId },
       include: {
-        scenarios: true, // Bu testin 'scriptFragment'lerini de al
+        scenarios: true,
       },
     });
 
@@ -61,7 +71,6 @@ export class TestsService {
       throw new NotFoundException('Test not found');
     }
 
-    // DB'ye 'PENDING' durumunda yeni bir TestRun kaydı oluştur
     const newTestRun = await this.prisma.testRun.create({
       data: {
         testId: testId,
@@ -69,10 +78,8 @@ export class TestsService {
       },
     });
 
-    // Kuyruğa iş ekle.
-    // DİKKAT: Artık 'test' objesinin tamamını (script'leriyle) yolluyoruz.
     await this.testRunnerQueue.add('run-k6-test', {
-      test: testToRun, // Tüm test verisi (options, scenarios, scriptFragments)
+      test: testToRun,
       runId: newTestRun.id,
     });
 
