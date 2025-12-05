@@ -11,12 +11,10 @@ export class TestsService {
     @InjectQueue('test-runner') private testRunnerQueue: Queue,
   ) {}
 
-  // --- 1. GÜNCELLENEN CREATE METODU (Hata Çözücü) ---
   async create(createTestDto: CreateTestDto) {
     const { name, projectId, options, selectedScenarioIds, targetBaseUrl } =
       createTestDto;
 
-    // DTO'dan gelen ID dizisini Prisma'nın 'connect' formatına çevir
     const scenarioConnections = selectedScenarioIds.map((id) => ({
       id: id,
     }));
@@ -24,12 +22,9 @@ export class TestsService {
     return this.prisma.test.create({
       data: {
         name: name,
-        options: options, // JSON objesini doğrudan kaydet
+        options: options,
         targetBaseUrl: targetBaseUrl,
 
-        // KRİTİK DÜZELTME BURADA:
-        // Eskiden sadece 'connect' diyorduk, bulamazsa patlıyordu.
-        // Şimdi 'connectOrCreate' diyoruz: Bulamazsan oluştur!
         project: {
           connectOrCreate: {
             where: { id: projectId },
@@ -41,24 +36,22 @@ export class TestsService {
         },
 
         scenarios: {
-          connect: scenarioConnections, // Seçilen tüm senaryolara bağla
+          connect: scenarioConnections,
         },
       },
     });
   }
 
-  // --- 2. GÜNCELLENEN FINDALL METODU (Tablo İçin) ---
   findAll() {
     return this.prisma.test.findMany({
       include: {
         scenarios: true,
         runs: true,
       },
-      orderBy: { createdAt: 'desc' }, // En yeniler en üstte gelsin
+      orderBy: { createdAt: 'desc' },
     });
   }
 
-  // --- 3. RUNTEST METODU (Aynı Kaldı) ---
   async runTest(testId: string) {
     const testToRun = await this.prisma.test.findUnique({
       where: { id: testId },

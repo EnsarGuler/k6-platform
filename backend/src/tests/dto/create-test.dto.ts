@@ -11,23 +11,22 @@ import {
 export class CreateTestDto {
   @IsString()
   @IsNotEmpty()
-  name: string; // Testin adı
+  name: string;
 
   @IsString()
   @IsNotEmpty()
-  projectId: string; // Hangi projeye ait olduğu
+  projectId: string;
 
   @IsObject()
   @IsNotEmpty()
-  options: Record<string, any>; // k6 'options' objesi (JSON)
-  // Örn: { "vus": 10, "duration": "30s" }
+  options: Record<string, any>;
 
   @IsArray()
-  @IsString({ each: true }) // Dizideki her eleman string olmalı
-  @ArrayMinSize(1) // En az bir senaryo seçilmeli
-  selectedScenarioIds: string[]; // Seçilen senaryoların ID'leri
+  @IsString({ each: true })
+  @ArrayMinSize(1)
+  selectedScenarioIds: string[];
 
   @IsUrl()
-  @IsOptional() // Boş gelmesine izin ver
+  @IsOptional()
   targetBaseUrl?: string;
 }

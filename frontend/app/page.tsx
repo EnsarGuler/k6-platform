@@ -23,7 +23,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Plus, FileText, Code } from "lucide-react";
-import { toast } from "sonner"; // Bildirim için
+import { toast } from "sonner";
 
 export default function ScenariosPage() {
   const queryClient = useQueryClient();

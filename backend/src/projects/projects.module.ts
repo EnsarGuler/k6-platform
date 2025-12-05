@@ -1,11 +1,10 @@
-// src/projects/projects.module.ts
 import { Module } from '@nestjs/common';
 import { ProjectsService } from './projects.service';
 import { ProjectsController } from './projects.controller';
-import { PrismaService } from 'src/prisma.service'; // 1. BU SATIRI EKLE
+import { PrismaService } from 'src/prisma.service';
 
 @Module({
   controllers: [ProjectsController],
-  providers: [ProjectsService, PrismaService], // 2. 'PrismaService'İ BURAYA EKLE
+  providers: [ProjectsService, PrismaService],
 })
 export class ProjectsModule {}

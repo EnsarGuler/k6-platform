@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Scenario, Test } from "@/lib/types";
-import { useRouter } from "next/navigation"; // Yönlendirme için eklendi
+import { useRouter } from "next/navigation";
 
 import {
   Card,
@@ -21,17 +21,15 @@ import { Play, Activity, Globe, Users, Clock, RefreshCcw } from "lucide-react";
 import { toast } from "sonner";
 
 export default function CreateTestPage() {
-  const router = useRouter(); // Router tanımlandı
+  const router = useRouter();
   const queryClient = useQueryClient();
 
-  // --- FORM STATE ---
   const [testName, setTestName] = useState("");
   const [targetUrl, setTargetUrl] = useState("https://test-api.k6.io");
   const [vus, setVus] = useState(5);
   const [duration, setDuration] = useState("10s");
   const [selectedScenarios, setSelectedScenarios] = useState<string[]>([]);
 
-  // 1. Senaryoları Getir
   const { data: scenarios, isLoading: loadingScenarios } = useQuery<Scenario[]>(
     {
       queryKey: ["scenarios"],
@@ -39,14 +37,12 @@ export default function CreateTestPage() {
     }
   );
 
-  // 2. Geçmiş Testleri Getir (Tablo İçin)
   const { data: tests, isLoading: loadingTests } = useQuery<Test[]>({
     queryKey: ["tests"],
     queryFn: async () => (await api.get("/tests")).data,
-    refetchInterval: 3000, // 3 saniyede bir tabloyu yenile (Canlı durum takibi)
+    refetchInterval: 3000,
   });
 
-  // 3. Test Başlatma İşlemi
   const startTestMutation = useMutation({
     mutationFn: async () => {
       const createPayload = {
@@ -64,7 +60,7 @@ export default function CreateTestPage() {
     },
     onSuccess: (testId) => {
       toast.success("Test Başlatıldı! Aşağıdan takip edebilirsin.");
-      queryClient.invalidateQueries({ queryKey: ["tests"] }); // Listeyi yenile
+      queryClient.invalidateQueries({ queryKey: ["tests"] });
     },
     onError: (err: any) => {
       toast.error("Hata: " + (err.response?.data?.message || err.message));
@@ -85,7 +81,6 @@ export default function CreateTestPage() {
     startTestMutation.mutate();
   };
 
-  // Durum Rengi Yardımcısı
   const getStatusColor = (status: string) => {
     switch (status) {
       case "COMPLETED":
@@ -101,7 +96,6 @@ export default function CreateTestPage() {
 
   return (
     <div className="p-8 max-w-6xl mx-auto space-y-12">
-      {/* --- ÜST KISIM: TEST OLUŞTURUCU FORM --- */}
       <div className="space-y-8">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-slate-900">
@@ -113,7 +107,6 @@ export default function CreateTestPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* AYARLAR */}
           <div className="lg:col-span-1 space-y-6">
             <Card>
               <CardHeader>
@@ -183,7 +176,6 @@ export default function CreateTestPage() {
             </Button>
           </div>
 
-          {/* SENARYOLAR */}
           <div className="lg:col-span-2">
             <Card className="h-full">
               <CardHeader>
@@ -225,7 +217,6 @@ export default function CreateTestPage() {
         </div>
       </div>
 
-      {/* --- ALT KISIM: TEST GEÇMİŞİ TABLOSU (BURASI EKSİKTİ) --- */}
       <div className="space-y-4 pt-8 border-t">
         <div className="flex justify-between items-center">
           <h2 className="text-2xl font-bold tracking-tight">Son Testler</h2>
@@ -272,7 +263,6 @@ export default function CreateTestPage() {
                       ?.slice()
                       .reverse()
                       .map((test) => {
-                        // Son çalıştırma kaydını al
                         const lastRun =
                           test.runs && test.runs.length > 0
                             ? test.runs[test.runs.length - 1]

@@ -8,24 +8,18 @@ import { Server } from 'socket.io';
 
 @WebSocketGateway({
   cors: {
-    origin: '*', // Her yerden erişime izin ver (Frontend 3001 için)
+    origin: '*',
   },
 })
 export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
 
-  handleConnection(client: any) {
-    // console.log('Client connected:', client.id);
-  }
+  handleConnection(client: any) {}
 
-  handleDisconnect(client: any) {
-    // console.log('Client disconnected:', client.id);
-  }
+  handleDisconnect(client: any) {}
 
-  // Veriyi Frontend'e yollayan fonksiyonumuz
   sendProgress(testId: string, data: any) {
-    // Sadece o testin odasına (channel) veriyi bas
     this.server.emit(`test-progress-${testId}`, data);
   }
 }

@@ -16,7 +16,6 @@ export class TestsController {
     return this.testsService.findAll();
   }
 
-  // Bu fonksiyon artık 'async' servisi çağırıyor
   @Post(':id/run')
   runTest(@Param('id') testId: string) {
     return this.testsService.runTest(testId);

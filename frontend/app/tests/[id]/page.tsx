@@ -70,38 +70,28 @@ export default function TestReportPage() {
     test.runs && test.runs.length > 0 ? test.runs[test.runs.length - 1] : null;
   const results = lastRun?.resultSummary;
 
-  // --- STATİK RAPOR GÖSTER ---
   if (results && !isLive) {
     const metrics = results.metrics;
 
-    // --- HATA ORANI HESAPLAMA (DEDEKTİF MODU 🕵️‍♂️) ---
     const failMetric = metrics.http_req_failed;
     let failRate = 0;
 
-    // 1. İhtimal: Direkt 'rate' içinde mi?
     if (typeof failMetric?.rate === "number") {
       failRate = failMetric.rate * 100;
-    }
-    // 2. İhtimal: 'values' objesinin içinde mi?
-    else if (typeof failMetric?.values?.rate === "number") {
+    } else if (typeof failMetric?.values?.rate === "number") {
       failRate = failMetric.values.rate * 100;
-    }
-    // 3. İhtimal: passes (hata var) ve fails (hata yok) sayıları direkt kökte mi?
-    else if (
+    } else if (
       failMetric?.passes !== undefined &&
       failMetric?.fails !== undefined
     ) {
       const total = failMetric.passes + failMetric.fails;
       failRate = total > 0 ? (failMetric.passes / total) * 100 : 0;
-    }
-    // 4. İhtimal: values içinde passes/fails var mı?
-    else if (failMetric?.values?.passes !== undefined) {
+    } else if (failMetric?.values?.passes !== undefined) {
       const passes = failMetric.values.passes;
       const fails = failMetric.values.fails;
       const total = passes + fails;
       failRate = total > 0 ? (passes / total) * 100 : 0;
     }
-    // --------------------------------------------------
 
     const avgDuration =
       metrics.http_req_duration?.avg ??
@@ -143,7 +133,6 @@ export default function TestReportPage() {
             </CardContent>
           </Card>
 
-          {/* HATA ORANI KARTI */}
           <Card>
             <CardHeader>
               <CardTitle className="text-sm">Error</CardTitle>
@@ -196,7 +185,6 @@ export default function TestReportPage() {
     );
   }
 
-  // --- CANLI İZLEME MODU ---
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8">
       <div className="flex items-center gap-4">

@@ -24,7 +24,7 @@ export class TestRunnerProcessor {
     const tempDir = path.join(process.cwd(), 'temp');
     const scriptPath = path.join(tempDir, `${runId}.js`);
     const summaryPath = path.join(tempDir, `${runId}.json`);
-    const realtimeLogPath = path.join(tempDir, `${runId}_live.json`); // Canlı log dosyası
+    const realtimeLogPath = path.join(tempDir, `${runId}_live.json`);
 
     const k6ScriptContent = this.buildK6Script(
       test.options,
@@ -41,8 +41,6 @@ export class TestRunnerProcessor {
       });
       await fs.writeFile(scriptPath, k6ScriptContent);
 
-      // --- CANLI VERİ OKUMA DÖNGÜSÜ ---
-      // Her 1 saniyede bir JSON dosyasının sonunu okuyup Frontend'e atacağız
       tailInterval = setInterval(async () => {
         try {
           const stats = await fs.stat(realtimeLogPath).catch(() => null);
@@ -51,30 +49,25 @@ export class TestRunnerProcessor {
           const content = await fs.readFile(realtimeLogPath, 'utf-8');
           const lines = content.trim().split('\n');
 
-          // Son satırlardan "http_req_duration" metriğini bul
           for (let i = lines.length - 1; i >= 0; i--) {
             try {
               const json = JSON.parse(lines[i]);
-              // Sadece veri noktalarını al ve http_req_duration'a bak
+
               if (
                 json.type === 'Point' &&
                 json.metric === 'http_req_duration'
               ) {
-                // Frontend'e gönder!
                 this.eventsGateway.sendProgress(test.id, {
-                  latency: json.data.value, // Gecikme süresi (ms)
+                  latency: json.data.value,
                   time: new Date().toLocaleTimeString(),
                 });
-                break; // Son veriyi bulduk, döngüden çık
+                break;
               }
             } catch (e) {}
           }
-        } catch (err) {
-          // Okuma hatası olursa sessiz kal
-        }
+        } catch (err) {}
       }, 1000);
 
-      // k6 Çalıştır (--out json ile)
       await execa(
         'k6',
         [
@@ -88,7 +81,6 @@ export class TestRunnerProcessor {
         { stdio: 'inherit' },
       );
 
-      // Bitince temizlik
       clearInterval(tailInterval);
 
       const summaryContent = await fs.readFile(summaryPath, 'utf-8');
@@ -103,12 +95,11 @@ export class TestRunnerProcessor {
         },
       });
 
-      // Bitiş sinyali
       this.eventsGateway.sendProgress(test.id, { type: 'FINISHED' });
 
       return { status: 'COMPLETED' };
     } catch (error) {
-      clearInterval(tailInterval!); // Hata olsa bile döngüyü durdur
+      clearInterval(tailInterval!);
       this.logger.error(`Failed`, error.stack);
       await this.prisma.testRun.update({
         where: { id: runId },
@@ -124,7 +115,6 @@ export class TestRunnerProcessor {
     }
   }
 
-  // --- ESKİ YARDIMCI METODLAR AYNEN KALDI ---
   private buildK6Script(
     options: any,
     scenarios: any[],
