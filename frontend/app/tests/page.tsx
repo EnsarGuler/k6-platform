@@ -6,30 +6,26 @@ import { api } from "@/lib/api";
 import { Scenario, Test } from "@/lib/types";
 import { useRouter } from "next/navigation";
 
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Play, Activity, Globe, Users, Clock, RefreshCcw } from "lucide-react";
+import { Play, Activity, Globe, RefreshCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 export default function CreateTestPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
 
+  // --- FORM STATE ---
   const [testName, setTestName] = useState("");
   const [targetUrl, setTargetUrl] = useState("https://test-api.k6.io");
   const [vus, setVus] = useState(5);
   const [duration, setDuration] = useState("10s");
   const [selectedScenarios, setSelectedScenarios] = useState<string[]>([]);
 
+  // 1. Senaryoları Getir
   const { data: scenarios, isLoading: loadingScenarios } = useQuery<Scenario[]>(
     {
       queryKey: ["scenarios"],
@@ -37,12 +33,14 @@ export default function CreateTestPage() {
     }
   );
 
+  // 2. Geçmiş Testleri Getir
   const { data: tests, isLoading: loadingTests } = useQuery<Test[]>({
     queryKey: ["tests"],
     queryFn: async () => (await api.get("/tests")).data,
     refetchInterval: 3000,
   });
 
+  // 3. Test Başlatma
   const startTestMutation = useMutation({
     mutationFn: async () => {
       const createPayload = {
@@ -59,13 +57,32 @@ export default function CreateTestPage() {
       return testId;
     },
     onSuccess: (testId) => {
-      toast.success("Test Başlatıldı! Aşağıdan takip edebilirsin.");
+      toast.success("Test Başlatıldı!");
       queryClient.invalidateQueries({ queryKey: ["tests"] });
     },
     onError: (err: any) => {
       toast.error("Hata: " + (err.response?.data?.message || err.message));
     },
   });
+
+  // 4. SİLME İŞLEMİ
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await api.delete(`/tests/${id}`);
+    },
+    onSuccess: () => {
+      toast.success("Test silindi!");
+      queryClient.invalidateQueries({ queryKey: ["tests"] });
+    },
+    onError: () => toast.error("Silinemedi."),
+  });
+
+  const handleDelete = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation(); // Satıra tıklamayı engelle
+    if (confirm("Bu testi silmek istediğine emin misin?")) {
+      deleteMutation.mutate(id);
+    }
+  };
 
   const toggleScenario = (id: string) => {
     setSelectedScenarios((prev) =>
@@ -96,6 +113,7 @@ export default function CreateTestPage() {
 
   return (
     <div className="p-8 max-w-6xl mx-auto space-y-12">
+      {/* ÜST KISIM: TEST OLUŞTURUCU */}
       <div className="space-y-8">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-slate-900">
@@ -217,6 +235,7 @@ export default function CreateTestPage() {
         </div>
       </div>
 
+      {/* ALT KISIM: TEST GEÇMİŞİ */}
       <div className="space-y-4 pt-8 border-t">
         <div className="flex justify-between items-center">
           <h2 className="text-2xl font-bold tracking-tight">Son Testler</h2>
@@ -235,7 +254,7 @@ export default function CreateTestPage() {
           <CardContent className="p-0">
             <div className="relative w-full overflow-auto">
               <table className="w-full caption-bottom text-sm text-left">
-                <thead className="[&_tr]:border-b bg-slate-50">
+                <thead className="bg-slate-50 [&_tr]:border-b">
                   <tr className="border-b transition-colors">
                     <th className="h-12 px-4 font-medium text-slate-500">
                       Test Adı
@@ -249,12 +268,13 @@ export default function CreateTestPage() {
                     <th className="h-12 px-4 font-medium text-slate-500">
                       Tarih
                     </th>
+                    <th className="h-12 px-4 font-medium text-slate-500 w-[50px]"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {loadingTests ? (
                     <tr>
-                      <td colSpan={4} className="p-4 text-center">
+                      <td colSpan={5} className="p-4 text-center">
                         Yükleniyor...
                       </td>
                     </tr>
@@ -273,7 +293,7 @@ export default function CreateTestPage() {
                           <tr
                             key={test.id}
                             className="border-b transition-colors hover:bg-slate-100 cursor-pointer"
-                            onClick={() => router.push(`/tests/${test.id}`)} // <-- İŞTE TIKLANAN YER
+                            onClick={() => router.push(`/tests/${test.id}`)}
                           >
                             <td className="p-4 font-medium">{test.name}</td>
                             <td className="p-4">
@@ -294,6 +314,16 @@ export default function CreateTestPage() {
                                     "tr-TR"
                                   )
                                 : "-"}
+                            </td>
+                            <td className="p-4">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="text-slate-400 hover:text-red-600 hover:bg-red-50"
+                                onClick={(e) => handleDelete(e, test.id)}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
                             </td>
                           </tr>
                         );

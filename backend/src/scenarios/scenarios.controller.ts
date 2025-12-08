@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Body } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+} from '@nestjs/common';
 import { ScenariosService } from './scenarios.service';
 import { CreateScenarioDto } from './dto/create-scenario.dto';
 
@@ -14,5 +22,17 @@ export class ScenariosController {
   @Get()
   findAll() {
     return this.scenariosService.findAll();
+  }
+
+  // GÜNCELLEME (PATCH)
+  @Patch(':id')
+  update(@Param('id') id: string, @Body() updateData: any) {
+    return this.scenariosService.update(id, updateData);
+  }
+
+  // SİLME (DELETE)
+  @Delete(':id')
+  remove(@Param('id') id: string) {
+    return this.scenariosService.remove(id);
   }
 }

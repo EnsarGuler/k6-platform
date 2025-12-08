@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete } from '@nestjs/common';
 import { TestsService } from './tests.service';
 import { CreateTestDto } from './dto/create-test.dto';
 
@@ -17,7 +17,13 @@ export class TestsController {
   }
 
   @Post(':id/run')
-  runTest(@Param('id') testId: string) {
-    return this.testsService.runTest(testId);
+  runTest(@Param('id') id: string) {
+    return this.testsService.runTest(id);
+  }
+
+  // SİLME İŞLEMİ İÇİN BU EKLENDİ
+  @Delete(':id')
+  remove(@Param('id') id: string) {
+    return this.testsService.remove(id);
   }
 }

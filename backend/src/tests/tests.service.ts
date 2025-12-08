@@ -82,4 +82,12 @@ export class TestsService {
       status: 'PENDING',
     };
   }
+
+  // Testi silme fonksiyonu
+  async remove(id: string) {
+    // Prisma'da Cascade ayarı varsa bağlı raporlar da silinir.
+    return this.prisma.test.delete({
+      where: { id },
+    });
+  }
 }

@@ -1,157 +1,167 @@
 "use client";
 
-import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { Scenario, CreateScenarioDto } from "@/lib/types";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
+import { useRouter } from "next/navigation";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Plus, FileText, Code } from "lucide-react";
-import { toast } from "sonner";
+  Activity,
+  Layers,
+  Play,
+  Server,
+  Zap,
+  ChevronRight,
+  BarChart3,
+} from "lucide-react";
 
-export default function ScenariosPage() {
-  const queryClient = useQueryClient();
-  const [isOpen, setIsOpen] = useState(false);
+export default function DashboardPage() {
+  const router = useRouter();
 
-  const defaultCode = `export function New_Action() {
-  let res = http.get(\`\${BASE_URL}/\`);
-  check(res, { 'status was 200': (r) => r.status == 200 });
-  sleep(1);
-}`;
-
-  const [formData, setFormData] = useState<CreateScenarioDto>({
-    name: "",
-    description: "",
-    scriptFragment: defaultCode,
+  // Verileri Çekelim (Özet Bilgi İçin)
+  const { data: tests } = useQuery({
+    queryKey: ["tests"],
+    queryFn: async () => (await api.get("/tests")).data,
   });
-
-  const { data: scenarios, isLoading } = useQuery<Scenario[]>({
+  const { data: scenarios } = useQuery({
     queryKey: ["scenarios"],
     queryFn: async () => (await api.get("/scenarios")).data,
   });
 
-  const createMutation = useMutation({
-    mutationFn: async (newScenario: CreateScenarioDto) => {
-      return await api.post("/scenarios", newScenario);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["scenarios"] });
-      setIsOpen(false);
-      setFormData({ name: "", description: "", scriptFragment: defaultCode });
-      toast.success("Senaryo kütüphaneye eklendi!");
-    },
-    onError: (err) => toast.error("Hata: " + err),
-  });
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    createMutation.mutate(formData);
-  };
+  // İstatistikler
+  const totalTests = tests?.length || 0;
+  const totalScenarios = scenarios?.length || 0;
+  const lastTest = tests && tests.length > 0 ? tests[tests.length - 1] : null;
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">
-            Senaryo Kütüphanesi
-          </h1>
-          <p className="text-slate-500 mt-1">
-            Sistemdeki mevcut test parçacıkları.
-          </p>
-        </div>
-
-        <Dialog open={isOpen} onOpenChange={setIsOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-blue-600 hover:bg-blue-700">
-              <Plus className="mr-2 h-4 w-4" /> Yeni Senaryo
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[700px]">
-            <DialogHeader>
-              <DialogTitle>Yeni Test Parçacığı Oluştur</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4 mt-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Senaryo Adı</Label>
-                  <Input
-                    placeholder="Örn: Login İşlemi"
-                    value={formData.name}
-                    onChange={(e) =>
-                      setFormData({ ...formData, name: e.target.value })
-                    }
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Açıklama</Label>
-                  <Input
-                    placeholder="Ne yapıyor?"
-                    value={formData.description}
-                    onChange={(e) =>
-                      setFormData({ ...formData, description: e.target.value })
-                    }
-                    required
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label>Script (JS)</Label>
-                <Textarea
-                  className="font-mono text-sm min-h-[300px] bg-slate-950 text-green-400 p-4"
-                  value={formData.scriptFragment}
-                  onChange={(e) =>
-                    setFormData({ ...formData, scriptFragment: e.target.value })
-                  }
-                  required
-                />
-              </div>
-              <Button type="submit" className="w-full">
-                Kaydet
-              </Button>
-            </form>
-          </DialogContent>
-        </Dialog>
+      {/* BAŞLIK */}
+      <div className="flex flex-col gap-2">
+        <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight">
+          k6 Otomasyon Kokpiti
+        </h1>
+        <p className="text-slate-500 text-lg">
+          Sistem aktif ve testlere hazır.
+        </p>
       </div>
 
-      {isLoading ? (
-        <div className="text-center py-10">Yükleniyor...</div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {scenarios?.map((scenario) => (
-            <Card key={scenario.id} className="hover:shadow-md transition-all">
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <FileText className="h-5 w-5 text-blue-500" />
-                  {scenario.name}
-                </CardTitle>
-                <CardDescription>{scenario.description}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="bg-slate-50 p-3 rounded-md border text-xs font-mono text-slate-600 overflow-hidden h-32 relative">
-                  <pre>{scenario.scriptFragment}</pre>
-                  <div className="absolute bottom-0 left-0 w-full h-12 bg-gradient-to-t from-slate-50 to-transparent" />
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+      {/* İSTATİSTİK KARTLARI */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Kart 1 */}
+        <Card className="border-l-4 border-l-blue-500 shadow-sm hover:shadow-md transition-shadow">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-slate-500">
+              Toplam Test
+            </CardTitle>
+            <Activity className="h-4 w-4 text-blue-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold">{totalTests}</div>
+            <p className="text-xs text-slate-500 mt-1">
+              çalıştırılan test sayısı
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Kart 2 */}
+        <Card className="border-l-4 border-l-orange-500 shadow-sm hover:shadow-md transition-shadow">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-slate-500">
+              Senaryo Kütüphanesi
+            </CardTitle>
+            <Layers className="h-4 w-4 text-orange-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold">{totalScenarios}</div>
+            <p className="text-xs text-slate-500 mt-1">hazır test parçacığı</p>
+          </CardContent>
+        </Card>
+
+        {/* Kart 3 */}
+        <Card className="border-l-4 border-l-green-500 shadow-sm hover:shadow-md transition-shadow">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-slate-500">
+              Sistem Durumu
+            </CardTitle>
+            <Server className="h-4 w-4 text-green-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">ONLINE</div>
+            <p className="text-xs text-slate-500 mt-1">
+              Docker servisleri aktif
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* HIZLI MENÜLER (BÜYÜK BUTONLAR) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div
+          onClick={() => router.push("/tests")}
+          className="group cursor-pointer rounded-xl border bg-white p-6 shadow-sm hover:border-blue-500 hover:shadow-lg transition-all"
+        >
+          <div className="flex items-center gap-4">
+            <div className="p-3 rounded-full bg-blue-100 text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+              <Play className="w-8 h-8" />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-slate-900 group-hover:text-blue-600">
+                Yeni Test Başlat
+              </h3>
+              <p className="text-slate-500">
+                Hedef URL belirle ve yük testi oluştur.
+              </p>
+            </div>
+            <ChevronRight className="w-6 h-6 ml-auto text-slate-300 group-hover:text-blue-500" />
+          </div>
         </div>
+
+        <div
+          onClick={() => router.push("/scenarios")}
+          className="group cursor-pointer rounded-xl border bg-white p-6 shadow-sm hover:border-orange-500 hover:shadow-lg transition-all"
+        >
+          <div className="flex items-center gap-4">
+            <div className="p-3 rounded-full bg-orange-100 text-orange-600 group-hover:bg-orange-600 group-hover:text-white transition-colors">
+              <Zap className="w-8 h-8" />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-slate-900 group-hover:text-orange-600">
+                Senaryo Yönetimi
+              </h3>
+              <p className="text-slate-500">
+                Kod kütüphanesini düzenle veya yeni ekle.
+              </p>
+            </div>
+            <ChevronRight className="w-6 h-6 ml-auto text-slate-300 group-hover:text-orange-500" />
+          </div>
+        </div>
+      </div>
+
+      {/* SON AKTİVİTE */}
+      {lastTest && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <BarChart3 className="w-5 h-5" /> Son Aktivite
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg border">
+              <div>
+                <p className="font-bold text-slate-800">{lastTest.name}</p>
+                <p className="text-sm text-slate-500">
+                  {lastTest.targetBaseUrl}
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => router.push(`/tests/${lastTest.id}`)}
+              >
+                Raporu Gör
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       )}
     </div>
   );
