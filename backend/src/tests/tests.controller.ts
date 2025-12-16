@@ -21,6 +21,18 @@ export class TestsController {
     return this.testsService.runTest(id);
   }
 
+  // ... diğer importlar
+  @Get('run/:runId')
+  async getTestRun(@Param('runId') runId: string) {
+    return this.testsService.getTestRun(runId);
+  }
+
+  // ... sınıfın içine ekle
+  @Get('runs/history')
+  async getAllRuns() {
+    return this.testsService.getAllRuns();
+  }
+
   // SİLME İŞLEMİ İÇİN BU EKLENDİ
   @Delete(':id')
   remove(@Param('id') id: string) {

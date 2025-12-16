@@ -21,26 +21,38 @@ export class TestRunnerProcessor {
     this.logger.log(`Processing job... Job ID: ${job.id}`);
     const { runId, test } = job.data;
 
+    // Geçici dosya yolları
     const tempDir = path.join(process.cwd(), 'temp');
+    try {
+      await fs.mkdir(tempDir, { recursive: true });
+    } catch (e) {}
+
     const scriptPath = path.join(tempDir, `${runId}.js`);
     const summaryPath = path.join(tempDir, `${runId}.json`);
     const realtimeLogPath = path.join(tempDir, `${runId}_live.json`);
 
+    // 1. Scripti İnşa Et
     const k6ScriptContent = this.buildK6Script(
       test.options,
-      test.scenarios,
+      test.selectedScenarios,
       test.targetBaseUrl,
     );
 
-    let tailInterval: NodeJS.Timeout;
+    // Debug için loga bas (İsteğe bağlı)
+    this.logger.debug('Generated k6 Script Preview:\n' + k6ScriptContent);
+
+    let tailInterval: NodeJS.Timeout | null = null;
 
     try {
+      // Durumu RUNNING yap
       await this.prisma.testRun.update({
         where: { id: runId },
         data: { status: 'RUNNING' },
       });
+
       await fs.writeFile(scriptPath, k6ScriptContent);
 
+      // 2. Canlı Log İzleme (Polling)
       tailInterval = setInterval(async () => {
         try {
           const stats = await fs.stat(realtimeLogPath).catch(() => null);
@@ -49,10 +61,10 @@ export class TestRunnerProcessor {
           const content = await fs.readFile(realtimeLogPath, 'utf-8');
           const lines = content.trim().split('\n');
 
+          // Sondan başa doğru en güncel logu bul
           for (let i = lines.length - 1; i >= 0; i--) {
             try {
               const json = JSON.parse(lines[i]);
-
               if (
                 json.type === 'Point' &&
                 json.metric === 'http_req_duration'
@@ -68,7 +80,10 @@ export class TestRunnerProcessor {
         } catch (err) {}
       }, 1000);
 
-      await execa(
+      // 3. K6'yı Çalıştır
+      // reject: false sayesinde, k6 threshold hatası (Exit code 99) verse bile catch bloğuna düşmez.
+      // Kontrolü biz aşağıda yapacağız.
+      const { exitCode } = await execa(
         'k6',
         [
           'run',
@@ -77,36 +92,53 @@ export class TestRunnerProcessor {
           summaryPath,
           '--out',
           `json=${realtimeLogPath}`,
+          '--insecure-skip-tls-verify',
         ],
-        { stdio: 'inherit' },
+        { stdio: 'inherit', reject: false },
       );
 
-      clearInterval(tailInterval);
+      if (tailInterval) clearInterval(tailInterval);
 
+      // Sonuç dosyasını oku
       const summaryContent = await fs.readFile(summaryPath, 'utf-8');
       const results = JSON.parse(summaryContent);
 
+      // 4. Durumu Belirle
+      // Exit Code 0: Başarılı
+      // Exit Code 99: Threshold Hatası (Test çalıştı ama hedefler tutmadı) -> FAILED olarak işaretleyebiliriz.
+      // Diğerleri: Sistem Hatası
+      let finalStatus = 'COMPLETED';
+
+      if (exitCode === 99) {
+        finalStatus = 'FAILED'; // Limitlere takıldı
+      } else if (exitCode !== 0) {
+        throw new Error(`k6 exited with error code: ${exitCode}`);
+      }
+
+      // Veritabanını Güncelle
       await this.prisma.testRun.update({
         where: { id: runId },
         data: {
-          status: 'COMPLETED',
+          status: finalStatus,
           endedAt: new Date(),
           resultSummary: results,
         },
       });
 
       this.eventsGateway.sendProgress(test.id, { type: 'FINISHED' });
-
-      return { status: 'COMPLETED' };
+      return { status: finalStatus };
     } catch (error) {
-      clearInterval(tailInterval!);
-      this.logger.error(`Failed`, error.stack);
+      if (tailInterval) clearInterval(tailInterval);
+      this.logger.error(`Test Execution Error: ${error.message}`);
+
       await this.prisma.testRun.update({
         where: { id: runId },
         data: { status: 'FAILED' },
       });
-      throw error;
+      // Kuyruğu tıkamamak için hata fırlatmıyoruz, sadece logluyoruz
+      return { status: 'FAILED' };
     } finally {
+      // Temizlik
       try {
         await fs.unlink(scriptPath).catch(() => {});
         await fs.unlink(summaryPath).catch(() => {});
@@ -115,32 +147,55 @@ export class TestRunnerProcessor {
     }
   }
 
+  // --- K6 SCRIPT OLUŞTURUCU (NORMAL MOD) ---
   private buildK6Script(
     options: any,
-    scenarios: any[],
+    selectedScenarios: any[],
     targetBaseUrl: string,
   ): string {
-    let script = `import http from 'k6/http'; import { check, sleep } from 'k6'; const BASE_URL = '${targetBaseUrl}';`;
-    for (const s of scenarios) script += `\n${s.scriptFragment}\n`;
-    const k6Scenarios: any = {};
-    for (const s of scenarios) {
-      const funcName = this.extractFunctionName(s.scriptFragment);
-      if (funcName) {
-        k6Scenarios[this.createSafeName(s.name)] = {
-          executor: 'constant-vus',
-          ...options,
-          exec: funcName,
-        };
-      }
-    }
-    script += `\nexport const options = { scenarios: ${JSON.stringify(k6Scenarios, null, 2)} };\n`;
+    let script = `
+import http from 'k6/http'; 
+import { check, sleep } from 'k6'; 
+const BASE_URL = '${targetBaseUrl}';
+`;
+
+    const k6ScenariosConfig: any = {};
+
+    selectedScenarios.forEach((item, index) => {
+      const scenario = item.scenario;
+      const safeName = `scenario_${index}_${this.createSafeName(scenario.name)}`;
+
+      // ✅ Regex Fix (Burası kritik, dokunmuyoruz):
+      // "export default function" -> "export function Isim()" dönüşümü
+      let fragment = scenario.scriptFragment.replace(
+        /export\s+default\s+function\s*(\(\s*\))?/,
+        `export function ${safeName}()`,
+      );
+
+      script += `\n// --- Scenario: ${scenario.name} ---\n${fragment}\n`;
+
+      // Executor Mantığı: Grafik (stages) var mı yoksa sabit mi?
+      const isRamping = options.stages && options.stages.length > 0;
+
+      k6ScenariosConfig[safeName] = {
+        executor: isRamping ? 'ramping-vus' : 'constant-vus',
+        exec: safeName,
+        ...options, // Frontend'den gelen ayarlar direkt geçer
+      };
+    });
+
+    // ❌ Yapay Threshold'ları Sildik!
+    // Artık sadece Frontend'den veya k6'nın kendi doğasından gelen sonuçlar geçerli.
+    script += `
+export const options = { 
+  scenarios: ${JSON.stringify(k6ScenariosConfig, null, 2)},
+  // Buraya elle 'thresholds' eklemiyoruz. Test doğal aksın.
+};
+`;
     return script;
   }
-  private extractFunctionName(f: string) {
-    const m = f.match(/export function (\w+)\s*\(/);
-    return m ? m[1] : null;
-  }
+
   private createSafeName(n: string) {
-    return n.replace(/ /g, '_').replace(/[^a-zA-Z0-9_-]/g, '');
+    return n.replace(/[^a-zA-Z0-9]/g, '_');
   }
 }

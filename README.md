@@ -13,6 +13,22 @@ Projenin Backend (Motor) ve Frontend (Kokpit) geliştirmeleri tamamlanmış, **R
 - **Backend:** NestJS (TypeScript), Prisma ORM, BullMQ, Socket.io
 - **Frontend:** Next.js 14, Tailwind CSS, Shadcn UI, Recharts
 
+## 🆕 Son Güncellemeler (Raporlama & Stabilite)
+
+### Backend (NestJS)
+
+- **k6 Script Generation Fix:** Script oluşturulurken yaşanan regex kaynaklı parantez hatası giderildi.
+- **Robust Error Handling:** `TestRunnerProcessor` güncellendi. Artık k6'nın çıkış kodları (Exit Code 99 vb.) doğru işleniyor ve sistem çökmeden "FAILED" durumu veritabanına işleniyor.
+- **Reporting API:** Geçmiş testleri listelemek (`history`) ve tekil test detayını çekmek (`run/:id`) için yeni endpoint'ler eklendi.
+
+### Frontend (Next.js)
+
+- **Raporlama Sistemi:**
+  - `/reports`: Tüm geçmiş testlerin listelendiği, duruma göre renklendirilmiş tablo sayfası eklendi.
+  - `/reports/[runId]`: Test sonuçlarının grafiksel ve sayısal olarak detaylı incelendiği sonuç sayfası eklendi.
+- **Akıllı Veri Okuyucu (Smart Metric Parser):** k6'dan dönen JSON verisinin formatı değişse bile (nested vs flat yapılar) hatasız okuyan ve `null` değerleri yöneten güvenli bir yapı kuruldu.
+- **Hata Oranı Hesaplama:** Dashboard üzerindeki hatalı istek oranı ve test süresi hesaplamaları manuel matematiksel formüllerle %100 doğruluk seviyesine getirildi.
+
 ## ✨ Temel Özellikler
 
 ### 1\. Backend & Altyapı

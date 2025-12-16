@@ -2,12 +2,15 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma.service';
 import { CreateTestDto } from './dto/create-test.dto';
 import { InjectQueue } from '@nestjs/bull';
-import type { Queue } from 'bull';
+import type { Queue } from 'bull'; // DÜZELTME: 'import type' ekledik ✅
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class TestsService {
   constructor(
     private prisma: PrismaService,
+    // Burada @InjectQueue kullandığımız için runtime'da Queue sınıfına gerek yok,
+    // NestJS 'test-runner' string'ine bakarak buluyor.
     @InjectQueue('test-runner') private testRunnerQueue: Queue,
   ) {}
 
@@ -21,20 +24,18 @@ export class TestsService {
 
     return this.prisma.test.create({
       data: {
-        name: name,
-        options: options,
+        name: name || `Test - ${new Date().toLocaleTimeString()}`,
+        options: options as Prisma.InputJsonValue,
         targetBaseUrl: targetBaseUrl,
-
         project: {
           connectOrCreate: {
-            where: { id: projectId },
+            where: { id: projectId || 'default-project' },
             create: {
-              id: projectId,
+              id: projectId || 'default-project',
               name: 'Varsayılan Proje',
             },
           },
         },
-
         scenarios: {
           connect: scenarioConnections,
         },
@@ -71,8 +72,14 @@ export class TestsService {
       },
     });
 
+    // Processor'a uygun veri formatı
+    const processorCompatibleData = {
+      ...testToRun,
+      selectedScenarios: testToRun.scenarios.map((s) => ({ scenario: s })),
+    };
+
     await this.testRunnerQueue.add('run-k6-test', {
-      test: testToRun,
+      test: processorCompatibleData,
       runId: newTestRun.id,
     });
 
@@ -83,9 +90,35 @@ export class TestsService {
     };
   }
 
-  // Testi silme fonksiyonu
+  // ... sınıfın içine ekle
+  async getTestRun(runId: string) {
+    const run = await this.prisma.testRun.findUnique({
+      where: { id: runId },
+      include: {
+        test: true, // Hangi teste ait olduğunu da görelim
+      },
+    });
+
+    if (!run) {
+      throw new NotFoundException('Rapor bulunamadı.');
+    }
+
+    return run;
+  }
+
+  // ... sınıfın içine ekle
+  async getAllRuns() {
+    return this.prisma.testRun.findMany({
+      include: {
+        test: true, // Hangi teste ait olduğunu bilmek için
+      },
+      orderBy: {
+        createdAt: 'desc', // En yenisi en başta olsun
+      },
+    });
+  }
+
   async remove(id: string) {
-    // Prisma'da Cascade ayarı varsa bağlı raporlar da silinir.
     return this.prisma.test.delete({
       where: { id },
     });
