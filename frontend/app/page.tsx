@@ -1,168 +1,188 @@
 "use client";
-
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { useRouter } from "next/navigation";
-import {
-  Activity,
-  Layers,
-  Play,
-  Server,
-  Zap,
-  ChevronRight,
-  BarChart3,
-} from "lucide-react";
+import { Activity, FileText, CheckCircle, Loader2 } from "lucide-react";
 
 export default function DashboardPage() {
-  const router = useRouter();
-
-  // Verileri Çekelim (Özet Bilgi İçin)
-  const { data: tests } = useQuery({
-    queryKey: ["tests"],
-    queryFn: async () => (await api.get("/tests")).data,
-  });
-  const { data: scenarios } = useQuery({
+  // 1. SENARYOLARI ÇEK (Sayısını göstermek için)
+  const { data: scenarios, isLoading: loadingScenarios } = useQuery({
     queryKey: ["scenarios"],
     queryFn: async () => (await api.get("/scenarios")).data,
   });
 
-  // İstatistikler
-  const totalTests = tests?.length || 0;
+  // 2. GEÇMİŞ TEST KOŞULARINI ÇEK (Toplam test sayısını göstermek için)
+  const { data: runs, isLoading: loadingRuns } = useQuery({
+    queryKey: ["history"],
+    queryFn: async () => (await api.get("/tests/runs/history")).data,
+  });
+
+  // Yükleniyor durumu kontrolü
+  const isLoading = loadingScenarios || loadingRuns;
+
+  // Veriler
   const totalScenarios = scenarios?.length || 0;
-  const lastTest = tests && tests.length > 0 ? tests[tests.length - 1] : null;
+  const totalRuns = runs?.length || 0;
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-8">
-      {/* BAŞLIK */}
-      <div className="flex flex-col gap-2">
-        <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight">
-          k6 Otomasyon Kokpiti
-        </h1>
-        <p className="text-slate-500 text-lg">
-          Sistem aktif ve testlere hazır.
-        </p>
-      </div>
-
-      {/* İSTATİSTİK KARTLARI */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Kart 1 */}
-        <Card className="border-l-4 border-l-blue-500 shadow-sm hover:shadow-md transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-500">
-              Toplam Test
-            </CardTitle>
-            <Activity className="h-4 w-4 text-blue-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{totalTests}</div>
-            <p className="text-xs text-slate-500 mt-1">
-              çalıştırılan test sayısı
+    <div className="min-h-screen bg-slate-950 text-slate-200 font-sans p-8">
+      <div className="max-w-7xl mx-auto">
+        {/* Üst Başlık */}
+        <div className="flex justify-between items-end mb-8 border-b border-slate-800 pb-6">
+          <div>
+            <h1 className="text-3xl font-bold text-white tracking-tight">
+              Platform Dashboard
+            </h1>
+            <p className="text-slate-400 text-sm mt-1">
+              Sistem durumu ve son aktiviteler
             </p>
-          </CardContent>
-        </Card>
-
-        {/* Kart 2 */}
-        <Card className="border-l-4 border-l-orange-500 shadow-sm hover:shadow-md transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-500">
-              Senaryo Kütüphanesi
-            </CardTitle>
-            <Layers className="h-4 w-4 text-orange-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{totalScenarios}</div>
-            <p className="text-xs text-slate-500 mt-1">hazır test parçacığı</p>
-          </CardContent>
-        </Card>
-
-        {/* Kart 3 */}
-        <Card className="border-l-4 border-l-green-500 shadow-sm hover:shadow-md transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-500">
-              Sistem Durumu
-            </CardTitle>
-            <Server className="h-4 w-4 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">ONLINE</div>
-            <p className="text-xs text-slate-500 mt-1">
-              Docker servisleri aktif
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* HIZLI MENÜLER (BÜYÜK BUTONLAR) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div
-          onClick={() => router.push("/tests")}
-          className="group cursor-pointer rounded-xl border bg-white p-6 shadow-sm hover:border-blue-500 hover:shadow-lg transition-all"
-        >
-          <div className="flex items-center gap-4">
-            <div className="p-3 rounded-full bg-blue-100 text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
-              <Play className="w-8 h-8" />
-            </div>
-            <div>
-              <h3 className="text-xl font-bold text-slate-900 group-hover:text-blue-600">
-                Yeni Test Başlat
-              </h3>
-              <p className="text-slate-500">
-                Hedef URL belirle ve yük testi oluştur.
-              </p>
-            </div>
-            <ChevronRight className="w-6 h-6 ml-auto text-slate-300 group-hover:text-blue-500" />
           </div>
+          <Link
+            href="/test/create"
+            className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold rounded-lg shadow-lg shadow-indigo-900/20 transition"
+          >
+            + Yeni Test Başlat
+          </Link>
         </div>
 
-        <div
-          onClick={() => router.push("/scenarios")}
-          className="group cursor-pointer rounded-xl border bg-white p-6 shadow-sm hover:border-orange-500 hover:shadow-lg transition-all"
-        >
-          <div className="flex items-center gap-4">
-            <div className="p-3 rounded-full bg-orange-100 text-orange-600 group-hover:bg-orange-600 group-hover:text-white transition-colors">
-              <Zap className="w-8 h-8" />
+        {/* İstatistik Kartları */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <StatCard
+            title="Toplam Test Koşusu"
+            value={
+              isLoading ? (
+                <Loader2 className="animate-spin w-8 h-8" />
+              ) : (
+                totalRuns
+              )
+            }
+            sub="Bugüne kadar yapılan"
+            icon={<Activity className="w-6 h-6" />}
+            color="text-indigo-400"
+          />
+          <StatCard
+            title="Aktif Senaryo"
+            value={
+              isLoading ? (
+                <Loader2 className="animate-spin w-8 h-8" />
+              ) : (
+                totalScenarios
+              )
+            }
+            sub="Kütüphanede kayıtlı"
+            icon={<FileText className="w-6 h-6" />}
+            color="text-emerald-400"
+          />
+          <StatCard
+            title="Sistem Sağlığı"
+            value="%100"
+            sub="Tüm servisler aktif"
+            icon={<CheckCircle className="w-6 h-6" />}
+            color="text-green-500"
+          />
+        </div>
+
+        {/* Alt Paneller */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Sol: Hızlı İşlemler */}
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-sm">
+            <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">
+              Hızlı Erişim
+            </h2>
+            <div className="space-y-3">
+              <QuickLink
+                href="/scenarios"
+                title="Senaryoları Yönet"
+                desc="Test senaryolarını düzenle veya ekle"
+              />
+              <QuickLink
+                href="/reports"
+                title="Raporları İncele"
+                desc="Geçmiş test sonuçlarına göz at"
+              />
+              <QuickLink
+                href="/test/create"
+                title="Hızlı Test Başlat"
+                desc="Ayarları yap ve hemen test et"
+              />
             </div>
-            <div>
-              <h3 className="text-xl font-bold text-slate-900 group-hover:text-orange-600">
-                Senaryo Yönetimi
-              </h3>
-              <p className="text-slate-500">
-                Kod kütüphanesini düzenle veya yeni ekle.
-              </p>
+          </div>
+
+          {/* Sağ: Sistem Bilgisi */}
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-sm">
+            <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">
+              Sistem Bilgileri
+            </h2>
+            <div className="space-y-4 text-sm">
+              <InfoRow
+                label="Backend Durumu"
+                value="Online"
+                color="text-emerald-400 font-bold"
+              />
+              <InfoRow label="Worker Node" value="1 Aktif" />
+              <InfoRow label="k6 Sürümü" value="v0.47.0" />
+              <InfoRow label="Veritabanı" value="PostgreSQL" />
             </div>
-            <ChevronRight className="w-6 h-6 ml-auto text-slate-300 group-hover:text-orange-500" />
           </div>
         </div>
       </div>
+    </div>
+  );
+}
 
-      {/* SON AKTİVİTE */}
-      {lastTest && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BarChart3 className="w-5 h-5" /> Son Aktivite
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg border">
-              <div>
-                <p className="font-bold text-slate-800">{lastTest.name}</p>
-                <p className="text-sm text-slate-500">
-                  {lastTest.targetBaseUrl}
-                </p>
-              </div>
-              <Button
-                variant="outline"
-                onClick={() => router.push(`/tests/${lastTest.id}`)}
-              >
-                Raporu Gör
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+// --- Bileşenler ---
+
+function StatCard({ title, value, sub, icon, color }: any) {
+  return (
+    <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl hover:border-slate-700 transition duration-200 shadow-sm group">
+      <div className="flex justify-between items-start">
+        <div>
+          <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+            {title}
+          </p>
+          <div
+            className={`text-3xl font-bold mt-2 text-white flex items-center gap-2`}
+          >
+            {value}
+          </div>
+          {sub && <p className="text-xs text-slate-500 mt-1">{sub}</p>}
+        </div>
+        <span
+          className={`p-3 rounded-lg bg-slate-950 border border-slate-800 ${color} group-hover:scale-110 transition-transform`}
+        >
+          {icon}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function QuickLink({ href, title, desc }: any) {
+  return (
+    <Link
+      href={href}
+      className="block group p-4 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 transition"
+    >
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-slate-200 font-semibold group-hover:text-white text-sm">
+            {title}
+          </h3>
+          <p className="text-xs text-slate-500 mt-0.5">{desc}</p>
+        </div>
+        <span className="text-slate-600 text-lg group-hover:translate-x-1 transition-transform">
+          →
+        </span>
+      </div>
+    </Link>
+  );
+}
+
+function InfoRow({ label, value, color = "text-slate-300" }: any) {
+  return (
+    <div className="flex justify-between border-b border-slate-800/50 pb-2 last:border-0">
+      <span className="text-slate-500">{label}</span>
+      <span className={color}>{value}</span>
     </div>
   );
 }

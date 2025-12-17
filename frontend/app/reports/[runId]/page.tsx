@@ -30,25 +30,30 @@ export default function ReportDetailPage() {
 
   if (loading)
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center text-white">
-        Rapor yükleniyor...
+      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center text-gray-400 font-mono">
+        <span className="animate-pulse">SYSTEM_LOADING...</span>
       </div>
     );
 
   if (error)
     return (
-      <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center text-white">
-        <h1 className="text-xl font-bold text-red-400 mb-2">Bir Hata Oluştu</h1>
-        <p className="text-gray-400 mb-4">{error}</p>
-        <Link href="/reports" className="bg-gray-700 px-4 py-2 rounded">
-          Listeye Dön
+      <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center text-white">
+        <h1 className="text-xl font-bold text-red-500 mb-2 font-mono">
+          SYSTEM_ERROR
+        </h1>
+        <p className="text-gray-500 mb-4">{error}</p>
+        <Link
+          href="/reports"
+          className="text-blue-400 hover:underline font-mono text-sm"
+        >
+          Return to Index
         </Link>
       </div>
     );
 
   if (!report) return null;
 
-  // --- AKILLI VERİ OKUYUCU ---
+  // --- VERİ İŞLEME MANTIĞI (Dokunulmadı) ---
   const findVal = (
     metricName: string,
     keys: string[],
@@ -57,16 +62,11 @@ export default function ReportDetailPage() {
     try {
       const metrics = report.resultSummary?.metrics;
       if (!metrics || !metrics[metricName]) return 0;
-
       const targetMetric = metrics[metricName];
-
       for (const key of keys) {
-        if (targetMetric.values && targetMetric.values[key] !== undefined) {
+        if (targetMetric.values && targetMetric.values[key] !== undefined)
           return Number(targetMetric.values[key]);
-        }
-        if (targetMetric[key] !== undefined) {
-          return Number(targetMetric[key]);
-        }
+        if (targetMetric[key] !== undefined) return Number(targetMetric[key]);
       }
       return 0;
     } catch (e) {
@@ -74,26 +74,12 @@ export default function ReportDetailPage() {
     }
   };
 
-  // --- HESAPLAMALAR (Manuel Matematik) ---
-
-  // 1. Toplam İstek
   const totalReqs = findVal("http_reqs", ["count"]);
-
-  // 2. Hatalı İstek (KRİTİK DÜZELTME: 'passes' alanı failed count'u tutar)
-  // http_req_failed metriğinde:
-  // passes = Hata Sayısı (True dönenler)
-  // fails  = Başarı Sayısı (False dönenler)
   const failedReqs = findVal("http_req_failed", ["passes"]);
-
-  // 3. Hata Oranını Kendimiz Hesaplıyoruz (En Garantisi)
   let failureRate = "0.00";
-  if (totalReqs > 0) {
-    failureRate = ((failedReqs / totalReqs) * 100).toFixed(2);
-  }
-
+  if (totalReqs > 0) failureRate = ((failedReqs / totalReqs) * 100).toFixed(2);
   const vusMax = findVal("vus", ["max", "value"]);
 
-  // Test Süresi
   let duration = "0.0";
   if (report.resultSummary?.state?.testRunDurationMs) {
     duration = (report.resultSummary.state.testRunDurationMs / 1000).toFixed(1);
@@ -103,15 +89,11 @@ export default function ReportDetailPage() {
     duration = ((end - start) / 1000).toFixed(1);
   }
 
-  // Gecikme (Latency)
   const avgDuration = findVal("http_req_duration", ["avg"], true).toFixed(2);
   const maxDuration = findVal("http_req_duration", ["max"], true).toFixed(2);
-
   let p95Raw = findVal("http_req_duration", ["p(95)"], true);
   if (p95Raw === 0) p95Raw = findVal("http_req_duration", ["p(90)"], true);
   const p95Duration = p95Raw.toFixed(2);
-
-  // Data
   const dataReceivedMB = (
     findVal("data_received", ["count"]) /
     1024 /
@@ -121,86 +103,121 @@ export default function ReportDetailPage() {
   const rps = findVal("http_reqs", ["rate"], true).toFixed(2);
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-8">
-      <div className="max-w-6xl mx-auto">
-        {/* Üst Başlık */}
-        <div className="flex items-center justify-between mb-8 border-b border-gray-800 pb-6">
+    // Arka planı zorla #0a0a0a (Simsiyah) yapıyoruz
+    <div className="min-h-screen bg-[#0a0a0a] text-gray-300 font-sans p-6 md:p-12 relative overflow-hidden">
+      {/* Arka Plan Deseni */}
+      <div className="absolute inset-0 bg-tech-pattern opacity-20 pointer-events-none"></div>
+
+      <div className="max-w-7xl mx-auto relative z-10">
+        {/* Header - Minimalist */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between mb-10 border-b border-gray-800 pb-6">
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-bold text-white">
-                {report.test?.name || "İsimsiz Test"}
+              <h1 className="text-2xl font-semibold text-white tracking-tight">
+                {report.test?.name || "Unnamed Test Execution"}
               </h1>
               <span
-                className={`px-3 py-1 text-sm rounded-full font-bold ${
-                  report.status === "COMPLETED" ? "bg-green-600" : "bg-red-600"
+                className={`px-2 py-0.5 text-[10px] uppercase tracking-widest font-bold rounded border ${
+                  report.status === "COMPLETED"
+                    ? "bg-green-500/10 text-green-400 border-green-500/20"
+                    : "bg-red-500/10 text-red-400 border-red-500/20"
                 }`}
               >
                 {report.status}
               </span>
             </div>
-            <p className="text-gray-400 mt-1 text-sm">
-              Run ID:{" "}
-              <span className="font-mono text-gray-500">{report.id}</span> •{" "}
-              {new Date(report.createdAt).toLocaleString()}
-            </p>
+            <div className="mt-2 text-xs font-mono text-gray-500 flex items-center gap-4">
+              <span>ID: {report.id}</span>
+              <span>|</span>
+              <span>{new Date(report.createdAt).toLocaleString("tr-TR")}</span>
+            </div>
           </div>
           <Link
             href="/reports"
-            className="bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded border border-gray-700 transition"
+            className="mt-4 md:mt-0 text-sm font-medium text-gray-400 hover:text-white transition flex items-center gap-2 group"
           >
-            ← Listeye Dön
+            <span className="group-hover:-translate-x-1 transition-transform">
+              ←
+            </span>{" "}
+            Back to Overview
           </Link>
         </div>
 
-        {/* 4 Ana Kart */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <StatCard title="Toplam İstek" value={totalReqs} icon="📦" />
-          <StatCard
-            title="Hatalı İstek"
-            value={`${failedReqs} (%${failureRate})`}
-            icon="🔥"
-            color={failedReqs > 0 ? "text-red-400" : "text-green-400"}
+        {/* KPI Grid - Kurumsal Kartlar */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+          <TechCard
+            label="Total Requests"
+            value={totalReqs.toLocaleString()}
+            unit="reqs"
+            icon={<ServerIcon />}
           />
-          <StatCard
-            title="Maksimum VUs"
+          <TechCard
+            label="Error Rate"
+            value={`%${failureRate}`}
+            unit={failedReqs + " errors"}
+            icon={<AlertIcon />}
+            highlight={Number(failureRate) > 0} // Hata varsa kırmızı yap
+          />
+          <TechCard
+            label="Concurrency"
             value={vusMax}
-            icon="👥"
-            color="text-blue-400"
+            unit="Max VUs"
+            icon={<UsersIcon />}
           />
-          <StatCard title="Test Süresi" value={`${duration} sn`} icon="⏱️" />
+          <TechCard
+            label="Duration"
+            value={duration}
+            unit="seconds"
+            icon={<ClockIcon />}
+          />
         </div>
 
-        {/* Detaylı Analiz Paneli */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Sol: Gecikme Süreleri */}
-          <div className="bg-gray-800 rounded-xl p-6 border border-gray-700 shadow-lg">
-            <h2 className="text-xl font-bold mb-4 text-blue-400 flex items-center gap-2">
-              ⚡ Gecikme (Latency) Analizi
-            </h2>
+        {/* Detay Panelleri */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Latency Panel */}
+          <div className="bg-[#111] border border-gray-800 rounded-lg p-6">
+            <div className="flex items-center gap-2 mb-6 border-b border-gray-800 pb-4">
+              <ActivityIcon className="text-blue-500" />
+              <h2 className="text-sm font-bold text-gray-100 uppercase tracking-wider">
+                Latency Metrics
+              </h2>
+            </div>
+
             <div className="space-y-4">
-              <Row label="Ortalama Süre" value={`${avgDuration} ms`} />
-              <Row
-                label="P95 (%95'i bundan hızlı)"
+              <MetricRow
+                label="Avg Response Time"
+                value={`${avgDuration} ms`}
+              />
+              <MetricRow
+                label="P95 (95th Percentile)"
                 value={`${p95Duration} ms`}
-                highlight
+                highlightColor="text-blue-400"
               />
-              <Row
-                label="En Yavaş İstek (Max)"
+              <MetricRow
+                label="Max Response Time"
                 value={`${maxDuration} ms`}
-                color="text-red-400"
+                highlightColor="text-orange-400"
               />
             </div>
           </div>
 
-          {/* Sağ: Verim (Throughput) */}
-          <div className="bg-gray-800 rounded-xl p-6 border border-gray-700 shadow-lg">
-            <h2 className="text-xl font-bold mb-4 text-purple-400 flex items-center gap-2">
-              📊 Verim & Ağ
-            </h2>
+          {/* Throughput Panel */}
+          <div className="bg-[#111] border border-gray-800 rounded-lg p-6">
+            <div className="flex items-center gap-2 mb-6 border-b border-gray-800 pb-4">
+              <NetworkIcon className="text-purple-500" />
+              <h2 className="text-sm font-bold text-gray-100 uppercase tracking-wider">
+                Throughput & Network
+              </h2>
+            </div>
+
             <div className="space-y-4">
-              <Row label="Saniye Başına İstek (RPS)" value={`${rps} req/s`} />
-              <Row label="Toplam Alınan Veri" value={`${dataReceivedMB} MB`} />
-              <Row label="Toplam Gönderilen Veri" value={`${dataSentKB} KB`} />
+              <MetricRow
+                label="Requests Per Second"
+                value={`${rps} req/s`}
+                highlightColor="text-purple-400"
+              />
+              <MetricRow label="Data Received" value={`${dataReceivedMB} MB`} />
+              <MetricRow label="Data Sent" value={`${dataSentKB} KB`} />
             </div>
           </div>
         </div>
@@ -209,35 +226,160 @@ export default function ReportDetailPage() {
   );
 }
 
-// --- YARDIMCI BİLEŞENLER ---
+// --- PROFESYONEL UI BİLEŞENLERİ ---
 
-function StatCard({ title, value, icon, color = "text-white" }: any) {
-  return (
-    <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg hover:border-gray-500 transition">
-      <div className="flex justify-between items-start">
-        <div>
-          <p className="text-gray-400 text-xs uppercase font-bold tracking-wider">
-            {title}
-          </p>
-          <p className={`text-2xl font-bold mt-1 ${color}`}>{value}</p>
-        </div>
-        <div className="text-3xl opacity-20 grayscale-0">{icon}</div>
-      </div>
-    </div>
-  );
-}
-
-function Row({ label, value, color = "text-white", highlight = false }: any) {
+function TechCard({ label, value, unit, icon, highlight = false }: any) {
   return (
     <div
-      className={`flex justify-between items-center p-3 rounded ${
-        highlight
-          ? "bg-gray-700/50 border border-gray-600"
-          : "border-b border-gray-700/50"
-      }`}
+      className={`bg-[#111] border ${
+        highlight ? "border-red-900/50 bg-red-900/10" : "border-gray-800"
+      } rounded-lg p-5 flex flex-col justify-between hover:border-gray-600 transition duration-200`}
     >
-      <span className="text-gray-400">{label}</span>
-      <span className={`font-mono font-bold ${color}`}>{value}</span>
+      <div className="flex justify-between items-start mb-2">
+        <span className="text-[11px] font-bold text-gray-500 uppercase tracking-widest">
+          {label}
+        </span>
+        <div className={`${highlight ? "text-red-400" : "text-gray-600"}`}>
+          {icon}
+        </div>
+      </div>
+      <div>
+        <div
+          className={`text-2xl font-mono font-medium ${
+            highlight ? "text-red-400" : "text-gray-100"
+          }`}
+        >
+          {value}
+        </div>
+        <div className="text-xs text-gray-500 mt-1 font-mono">{unit}</div>
+      </div>
     </div>
   );
 }
+
+function MetricRow({ label, value, highlightColor = "text-gray-200" }: any) {
+  return (
+    <div className="flex justify-between items-center py-2 border-b border-gray-800/50 last:border-0">
+      <span className="text-sm text-gray-400">{label}</span>
+      <span className={`font-mono text-sm ${highlightColor}`}>{value}</span>
+    </div>
+  );
+}
+
+// --- SVG İKONLAR (EMOJİ YERİNE) ---
+// Bu ikonlar "Lucide" tarzı temiz vektörlerdir.
+
+const ServerIcon = ({ className = "w-5 h-5" }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="24"
+    height="24"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+  >
+    <rect width="20" height="8" x="2" y="2" rx="2" ry="2" />
+    <rect width="20" height="8" x="2" y="14" rx="2" ry="2" />
+    <line x1="6" x2="6.01" y1="6" y2="6" />
+    <line x1="6" x2="6.01" y1="18" y2="18" />
+  </svg>
+);
+
+const AlertIcon = ({ className = "w-5 h-5" }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="24"
+    height="24"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+  >
+    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+    <path d="M12 9v4" />
+    <path d="M12 17h.01" />
+  </svg>
+);
+
+const UsersIcon = ({ className = "w-5 h-5" }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="24"
+    height="24"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+  >
+    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+    <circle cx="9" cy="7" r="4" />
+    <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+  </svg>
+);
+
+const ClockIcon = ({ className = "w-5 h-5" }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="24"
+    height="24"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+  >
+    <circle cx="12" cy="12" r="10" />
+    <polyline points="12 6 12 12 16 14" />
+  </svg>
+);
+
+const ActivityIcon = ({ className = "w-5 h-5" }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="24"
+    height="24"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+  >
+    <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+  </svg>
+);
+
+const NetworkIcon = ({ className = "w-5 h-5" }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="24"
+    height="24"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+  >
+    <rect x="16" y="16" width="6" height="6" rx="1" />
+    <rect x="2" y="16" width="6" height="6" rx="1" />
+    <rect x="9" y="2" width="6" height="6" rx="1" />
+    <path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3" />
+    <path d="M12 12V8" />
+  </svg>
+);
